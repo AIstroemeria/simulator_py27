@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ### py2 ###
 from __future__ import division
 ######
@@ -11,12 +12,14 @@ import json
 import sys, os, time
 import threading
 import random
+import multiprocessing as mp
 import matplotlib.pyplot as plt
 from junction_model import junction_btn
 from entrance_model import entrance_btn
 from main_window import the_map_window
 from layout_Dialog import InputDialog
 from generating_Dialog import generate_Dialog
+from simulating import simulating
 
 class MDIFrame(wx.MDIParentFrame):
     def __init__(self):
@@ -80,8 +83,9 @@ class Simulator_frame(wx.MDIChildFrame):
         self.m = m #num of horizontal lines
         self.n = n #num of vertival lines
         self.noj = 2*m*n - m - n
-        self.rythmn = 2
-        
+        self.rhythm = 2
+        self.simulation_res = None
+
         self.is_start = False
         self.t_start = None
         self.pausing_time = 0
@@ -89,6 +93,7 @@ class Simulator_frame(wx.MDIChildFrame):
         self.next_t_start = None
         self.counting = -1
         self.accelarate_r = 5
+        self.time_duration = 0.1 # duration between different simulation frames
 
         block_scale = 100
         road_scale = 1/12
@@ -284,9 +289,9 @@ class Simulator_frame(wx.MDIChildFrame):
         self.Bind(wx.EVT_SCROLL_CHANGED, self.Change_rate_slider, self.rate_slider)
         self.Bind(wx.EVT_SPINCTRL, self.Change_rate_sc, self.rate_sc)
 
-        thread_sw = threading.Thread(target=self.StopWatchThread)
-        thread_sw.setDaemon(True)
-        thread_sw.start()
+        thread_mt = threading.Thread(target=self.Mainthread)
+        thread_mt.setDaemon(True)
+        thread_mt.start()
     
     def initStatusBar(self):
         self.statusbar = self.CreateStatusBar()
@@ -367,6 +372,17 @@ class Simulator_frame(wx.MDIChildFrame):
             wx.MessageBox('Done!')
             self.statusbar.SetStatusText("Loading success" , 0)
 
+        q_frame = mp.Queue()
+        th_processing = threading.Thread(target=simulating, args=(self.time_duration, q_frame, self.res, self.rhythm, self.m, self.n, self.noj, 
+            self.blocksize, self.dis_matrix, self.pre_matrix, self.locations, self.junc2block))
+
+        self.simulation_res = []
+        while True:
+            temp_res = q_frame.get()
+            if temp_res is None:
+                break
+            self.simulation_res.append(temp_res)
+        th_processing.join()
         dlg.Destroy()
         
     # play simulation 
@@ -396,8 +412,6 @@ class Simulator_frame(wx.MDIChildFrame):
         self.pretime = self.t_start
         self.newtime = self.t_start
 
-        self.timelock = True #进程锁
-
         self.btn3.Enabled = True
         self.btn4.Enabled = False
         self.btn5.Enabled = False
@@ -418,22 +432,14 @@ class Simulator_frame(wx.MDIChildFrame):
     # resume
     def resuming(self, event):
         print("press btn4")
+        self.pretime = time.time()
+        self.is_start = True
+        self.statusbar.SetStatusText("Playing" , 0)
 
-        while True:
-            if self.timelock:
-                self.timelock = False
+        self.btn3.Enabled = True
+        self.btn4.Enabled = False
+        self.btn5.Enabled = False
 
-                self.pretime = time.time()
-                self.is_start = True
-                self.statusbar.SetStatusText("Playing" , 0)
-
-                self.btn3.Enabled = True
-                self.btn4.Enabled = False
-                self.btn5.Enabled = False
-
-                self.timelock = True
-                break
-    
     # go to next rhythm, able when paused
     def go_next_rhy(self, event):
         print("press btn5")
@@ -485,8 +491,46 @@ class Simulator_frame(wx.MDIChildFrame):
         plt.show()
 
     # simulation player
-    def StopWatchThread(self):
+    def Mainthread(self):
         '''线程函数'''
+        while True:
+            if self.is_start:
+                if self.reload:
+                    pass ###
+
+                if not self.next_flag:
+                    self.newtime = time.time()
+                    new_period = self.accelarate_r * (self.newtime - self.pretime) # scaling simulation time
+                    self.current_running_t = self.current_running_t + new_period # scaling simulation time
+                    self.pretime = self.newtime
+                    self.fps_label.SetLabel("fps %.1f" % (1/new_period))
+                else:
+                    self.pretime = time.time()
+                    self.current_running_t = self.current_running_t - np.mod(self.current_running_t,self.rhythm) + self.rhythm
+                    self.is_start = False
+                    self.next_flag = False
+                
+                self.statusbar.SetStatusText("Operating time: %d sec %d min %d hour" %(np.mod(current_running_t,60),np.floor(np.mod(current_running_t,3600)/60),
+                    np.floor(current_running_t/3600)) , 1)
+                self.counting_frames = np.floor(current_running_t / self.time_duration)
+                pre_wave = wave #?
+                wave = int(np.floor(self.counting *self.time_duration / self.rhythm))
+                timer1 = np.mod(self.counting_frames , self.rhythm) #?
+
+                self.set_gauge(wave/len(self.res)*100) #?
+
+                if len(self.simulation_res) <= self.counting_frames:
+                    time.sleep(0.1)
+                    self.pretime = time.time()
+                    continue
+                
+                cur_frame = self.simulation_res[self.counting_frames][0]
+                num_change = self.simulation_res[self.counting_frames][1]
+                wx.CallAfter(self.updating_infos_in_map, cur_frame, num_change)
+
+
+        ##############################################
+
         global points
         global nums
         
@@ -505,11 +549,6 @@ class Simulator_frame(wx.MDIChildFrame):
                 #if 'pre_time' not in dir():
                 #    pre_time = self.t_start
 
-                if not self.timelock:
-                    continue
-                
-                self.timelock = False
-
                 if not self.next_flag:
                     self.newtime = time.time() 
                     new_period = temp_rate*(self.newtime - self.pretime) # scaling simulation time
@@ -518,12 +557,10 @@ class Simulator_frame(wx.MDIChildFrame):
                     self.fps_label.SetLabel("fps %.1f" % (1/new_period))
                 else:
                     self.pretime = time.time()
-                    self.current_running_t = self.current_running_t + self.rythmn
+                    self.current_running_t = self.current_running_t + self.rhythm
                     self.is_start = False
                     self.next_flag = False
                 
-                self.timelock = True
-
                 current_running_t = self.current_running_t
                 temp_rate = self.accelarate_r
 
@@ -532,8 +569,8 @@ class Simulator_frame(wx.MDIChildFrame):
                     np.floor(current_running_t/3600)) , 1)
                 self.counting = np.floor(current_running_t) 
                 pre_wave = wave
-                wave = int(np.floor(self.counting/self.rythmn))
-                timer1 = np.mod(self.counting,self.rythmn)
+                wave = int(np.floor(self.counting/self.rhythm))
+                timer1 = np.mod(self.counting,self.rhythm)
 
                 self.set_gauge(wave/len(self.res)*100)
                 
@@ -541,6 +578,7 @@ class Simulator_frame(wx.MDIChildFrame):
                 for item in points:  
                 # [starting_node, ending_node, starting_time, point_location, lifetime, point_flags]
                 # [0            , 1          , 2            , 3,            , 4       , 5     ]
+                # point_flags:[status(loaded),count_out,]
 
                     moving_time = current_running_t - item[2]
 
@@ -563,13 +601,14 @@ class Simulator_frame(wx.MDIChildFrame):
 
                         new_flags = copy.copy(item[5])
 
-                        # run out of entrance block
+                        # run out of entrance block, update block
                         if item[0] < self.m+self.n:
                             temp_block_loc = self.entrance2block[item[0]]
                             if np.floor(moving_time) == 0 and not new_flags[1]:
                                 wx.CallAfter(self.updating_infos_in_entrbtn,0,-1, temp_block_loc,self.counting)
                                 new_flags[1] = True
-
+                        
+                        # 
                         if item[1] < 2*self.m + 2*self.n or (item[2] + item[4] - self.counting) > 5:
                             loc0 = []
                             loc1 = []
@@ -630,8 +669,8 @@ class Simulator_frame(wx.MDIChildFrame):
                         exitan = [(2+block_loc[1])*self.blocksize[0],(self.m-block_loc[0])*self.blocksize[1]]
                         junc_loc = self.locations[item[0]]
                         '''
-                        new_location = [exitan[0]*(-moving_time)/self.rythmn + junc_loc[0]*(1+moving_time/self.rythmn),
-                            exitan[1]*(-moving_time)/self.rythmn + junc_loc[1]*(1+moving_time/self.rythmn)]
+                        new_location = [exitan[0]*(-moving_time)/self.rhythm + junc_loc[0]*(1+moving_time/self.rhythm),
+                            exitan[1]*(-moving_time)/self.rhythm + junc_loc[1]*(1+moving_time/self.rhythm)]
                         '''
 
                         new_location = junc_loc
@@ -650,7 +689,7 @@ class Simulator_frame(wx.MDIChildFrame):
                         
                 points = copy.copy(new_points)
 
-                # refresh demands and permissions at new rythmn arrival
+                # refresh demands and permissions at new rhythm arrival
                 if timer1 == 0:
                     if not wave_flag[wave]:
                         wave_flag[wave] = True
@@ -666,15 +705,37 @@ class Simulator_frame(wx.MDIChildFrame):
                                 lifetime = lifetime + 5
                             for i in range(int(item[3])):
                                 point_flags = [int(item[4]),False] # loaded, on_road
-                                points.append([temp_location[0],temp_location[1],(wave+1)*self.rythmn,self.locations[temp_location[0]],lifetime,point_flags])
+                                points.append([temp_location[0],temp_location[1],(wave+1)*self.rhythm,self.locations[temp_location[0]],lifetime,point_flags])
                         
                     
                 wx.CallAfter(self.updating_infos_in_map)
             time.sleep(0.03)
     
-    def updating_infos_in_map(self):
+    def updating_infos_in_map(self, points, changes):
         self.map.SetpointsData(points)
-        self.map.SetnumsData(nums)
+        for item in changes:
+            if item[2] == 0:
+                if item[1] >= 2*(self.m+self.n):
+                    block_loc = self.junc2block[item[1] - 2*self.m - 2*self.n]
+                    self.updating_infos_in_juncbtn(0, item[3], block_loc, self.counting_frames*self.time_duration)
+                    self.completemission += item[3]
+                    self.statusbar.SetStatusText("Complete mission: %d" % self.completemission, 2)
+                elif item[1] >= (self.m+self.n):
+                    block_loc = self.entrance2block[item[1]]
+                    self.updating_infos_in_entrbtn(0, item[3], block_loc, self.counting_frames*self.time_duration)
+                    self.completemission += item[3]
+                    self.statusbar.SetStatusText("Complete mission: %d" % self.completemission, 2)
+            elif item[2] == 1:
+                if item[1] >= 2*(self.m+self.n):
+                    block_loc = self.junc2block[item[1] - 2*self.m - 2*self.n]
+                    self.updating_infos_in_juncbtn(item[3], item[3], block_loc, self.counting_frames*self.time_duration)
+                    self.completemission += item[3]
+                    self.statusbar.SetStatusText("Complete mission: %d" % self.completemission, 2)
+                elif item[1] >= (self.m+self.n):
+                    block_loc = self.entrance2block[item[1]]
+                    self.updating_infos_in_entrbtn(item[3], item[3], block_loc, self.counting_frames*self.time_duration)
+                    self.completemission += item[3]
+                    self.statusbar.SetStatusText("Complete mission: %d" % self.completemission, 2)
 
     def updating_infos_in_juncbtn(self,num1,num2,order,time):
         self.junction_blocks[order[0]][order[1]].Changenum1Data(num1)

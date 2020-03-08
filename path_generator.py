@@ -69,33 +69,7 @@ class Pathes():
         self.path = copy.copy(path)
         self.length = length
 
-def generate_path_rythmn_old(m, n, noj, juncs, Ts, lor):
-    n1 = 2*(m+n) + 4*m*n + noj  #num of all nodes
-    n2 = m + n + noj            #num of O/Ds
-    num_of_nodes = lor.shape[0]
-    pathes = [[Pathes(0)]*num_of_nodes]*num_of_nodes
-    for i in range(num_of_nodes):
-        res, pre, dis = Dijkstra(lor,i)
-        for j in range(num_of_nodes):
-            if dis[j] >= 10000:
-                pass
-            else:
-                cur_node = j
-                temp_path = []
-                temp_length = 0
-                while cur_node != i:
-                    pre_node = pre[cur_node]
-                    temp_path.append((pre_node, cur_node))
-                    temp_length = temp_length + lor[pre_node, cur_node]
-                    cur_node = pre_node
-                temp_path.reverse()
-                pathes[i][j].change(1,i,j,temp_path, temp_length)
-                ###
-                print("generate path from %d to %d\r\n" % (i,j))
-                ###
-    return pathes
-
-def generate_path_rythmn(num_of_nodes, edges):
+def generate_path_rhythm(num_of_nodes, edges):
     pre_matrix = -np.ones((num_of_nodes,num_of_nodes))
     dis_matrix = np.inf * np.ones((num_of_nodes,num_of_nodes))
     res_matrix = np.zeros((num_of_nodes,num_of_nodes))

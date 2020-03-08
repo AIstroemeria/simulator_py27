@@ -1,10 +1,8 @@
-
 # -*- coding: utf-8 -*-
 ### py2 ###
 from __future__ import division
 ######
 import copy
-import aa_spr
 import os
 import io
 from demand_generator import *
@@ -239,19 +237,19 @@ def scenario_generator(de,wh,rhy,pla):
         #renew cost
         cost = rhythm*(1+lw)
 
-        process = '|'
-        for i in range(30):
-            if i < 30*iter/(workingtime/rhythm):
-                process = process + "#"
-            else:
-                process = process + ' '
-        process = process + '|  %d'%np.round(100*iter/(3600/rhythm)) + '%'
-        process1 = 'total car num: %d  ;  total waiting time %d ' %(total_car_num, total_waiting_time)
-        print('')
-        print('')
-        print(iter)
-        print(process)
-        print(process1)
+        #process = '|'
+        #for i in range(30):
+            #if i < 30*iter/(workingtime/rhythm):
+                #process = process + "#"
+            #else:
+                #process = process + ' '
+        #process = process + '|  %d'%np.round(100*iter/(3600/rhythm)) + '%'
+        #process1 = 'total car num: %d  ;  total waiting time %d ' %(total_car_num, total_waiting_time)
+        #print('')
+        #print('')
+        #print(iter)
+        #print(process)
+        #print(process1)
 
         if iter >= ((workingtime/(2*rhythm))-1) and sum(sum(demand))==0 and remainning_order == 0:
             print("demand satisfied at interval %d" %iter)

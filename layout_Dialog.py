@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 ### py2 ###
 from __future__ import division
+
 ######
 import os 
 import io
@@ -14,9 +15,8 @@ class InputDialog(wx.Dialog):
     def __init__(self, func_callBack):
         wx.Dialog.__init__(self, None, -1, "network layout", size=(320, 300))
         self.func_callBack = func_callBack
- 
-        self.InitUI() #绘制Dialog的界面
- 
+        self.InitUI() #绘制Dialog的界面 
+
     def InitUI(self):
         panel = wx.Panel(self)
  
@@ -138,7 +138,7 @@ class InputDialog(wx.Dialog):
                 if lor[i][j] < 10000:
                     edges[i].append((j,lor[i][j]))
         
-        pre_matrix,dis_matrix = generate_path_rythmn(num_of_nodes, edges)
+        pre_matrix,dis_matrix = generate_path_rhythm(num_of_nodes, edges)
         data = {"pre":pre_matrix.tolist(), "dis":dis_matrix.tolist(),"m":m, "n":n}
         temp = 0
         filename = "./layout"+str(temp)+".json"
