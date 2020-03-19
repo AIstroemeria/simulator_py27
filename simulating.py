@@ -5,10 +5,13 @@ import multiprocessing as mp
 import threading as td
 import numpy as np
 import copy
+import sys
 
 def dynamic_model(start_p, end_p, proc, type = 0, action = 0):
     if type == 0:
-        cur_p = start_p + proc * (end_p - start_p)
+        cur_p = [0,0]
+        cur_p[0] = start_p[0] + proc * (end_p[0] - start_p[0])
+        cur_p[1] = start_p[1] + proc * (end_p[1] - start_p[1])
         if action is not None:
             rate = proc - 0.5
             thre = 0.2
@@ -56,7 +59,8 @@ def worker(qin, qout, m, n, noj, blocksize, dis_matrix, pre_matrix, locations, j
 
         # unit arrives, removed
         if point[4] < moving_time:
-            qout.put((point[0], point[1], point[5][0]))
+            qout.put((point[0], point[1], point[5][0], 1, 0))
+            continue
 
         # unit on its way
         if moving_time >= 0:
@@ -65,7 +69,7 @@ def worker(qin, qout, m, n, noj, blocksize, dis_matrix, pre_matrix, locations, j
             # get out of entrance 
             if point[0] < (m + n) and not new_flags[1]:
                 new_flags[1] = True
-                updating_func(temp_update, temp_update_dict, point[0], point[1], new_flags[0], -1)
+                qout.put((point[0], point[1], new_flags[0], -1, 1))
 
             if point[1] < (2*m + 2*n) or remaining_time > 5:
                 loc0 = []
@@ -116,13 +120,14 @@ def worker(qin, qout, m, n, noj, blocksize, dis_matrix, pre_matrix, locations, j
 
             
             # get into junction        
-            elif remaining_time <= 5:
+            else:
                 block_loc = junc2block[point[1] - 2*m - 2*n]
                 exitan = [(2+block_loc[1])*blocksize[0],(m-block_loc[0])*blocksize[1]]
                 junc_loc = locations[point[1]]
                 new_location = [exitan[0]*(5-remaining_time)/5+junc_loc[0]*remaining_time/5,
                     exitan[1]*(5-remaining_time)/5+junc_loc[1]*remaining_time/5]
                 new_flags[2] = True
+                qout.put((point[0], point[1], new_flags[0], 1, 1))
 
             qout.put({'cur_time': cur_time, 'point': [point[0], point[1], point[2], 
                 new_location, point[4], new_flags]})
@@ -145,7 +150,7 @@ def worker(qin, qout, m, n, noj, blocksize, dis_matrix, pre_matrix, locations, j
             new_flags = copy.copy(point[5])
             if not new_flags[1]:
                 new_flags[1] = True
-                updating_func(temp_update, temp_update_dict, point[0], point[1], new_flags[0], -1)
+                qout.put((point[0], point[1], new_flags[0], -1, 1))
 
             qout.put({'cur_time':cur_time, 'point': [point[0], point[1], point[2], 
                 new_location, point[4], new_flags]}) 
@@ -168,13 +173,13 @@ def supervisor(q_frame, qin, qout, time_duration, schedule, m, n, noj, dis_matri
     while True: 
         if len(tasks) == 0:
             if wave >= len(schedule):
+                q_frame.put(None)
                 if len(temp_res) == 0: 
                     for _ in range(mp_num):
                         qin.put(None)
-                    print("calculating done!")
+                    sys.stdout.write("calculating done!")
                     break
             elif counting == 0:
-                timer += time_duration
                 tasks += next_tasks
                 next_tasks = []
 
@@ -183,9 +188,8 @@ def supervisor(q_frame, qin, qout, time_duration, schedule, m, n, noj, dis_matri
                 temp_update = []
                 temp_update_dict = {}
 
-                if timer >= next_wave:
+                if timer >= next_wave*10:
                     next_wave += rhythm
-                    wave += 1
                     for point in schedule[wave]:
                         data = {}
                         tasks_location = [int(point[0]),int(point[1]) + m + n]
@@ -196,29 +200,36 @@ def supervisor(q_frame, qin, qout, time_duration, schedule, m, n, noj, dis_matri
                             lifetime += 5
                         for i in range(int(point[3])):
                             point_flags = [int(point[4]), False, False] # loaded, on_road, finish
-                            data['cur_time'] = timer
-                            data['point'] = [tasks_location[0], tasks_location[1], wave*rhythm, 
+                            data['cur_time'] = timer/10
+                            data['point'] = [tasks_location[0], tasks_location[1], (wave+1)*rhythm, 
                                 locations[tasks_location[0]], lifetime, point_flags]
                             tasks.append(data)
+                    wave += 1
+
                 counting = len(tasks)
-                for i in range(q_length):
+                for i in range(min(q_length,counting)):
                     qin.put(tasks.pop(0))
 
+                timer += time_duration
+
         try:
+            # sys.stdout.write('wave: ' + str(wave) + ' time:' + str(timer) + ' qout:' + str(qout.qsize()) + '\r\n')
             new_task = qout.get(timeout=1)
             counting -= 1
             if len(tasks) > 0:
                 qin.put(tasks.pop(0))
-            if isinstance(new_task, list):
-                updating_func(temp_update, temp_update_dict, new_task[0], new_task[1], new_task[2], 1)
+            if isinstance(new_task, tuple):  # [start, end, type, num, iscounted]
+                updating_func(temp_update, temp_update_dict, new_task[0], new_task[1], new_task[2], new_task[3])
+                counting += new_task[4]
             else:
-                next_tasks.append({'cur_time':new_task['cur-time']+time_duration, 'point':new_task['point']})
+                next_tasks.append({'cur_time':(timer + time_duration)/10, 'point':new_task['point']})
                 temp_res.append(new_task['point'])
         except Exception as e:
             print(e)
     q_frame.put(None)
 
 def simulating(time_duration, q_frame, schedule, rhythm, m, n, noj, blocksize, dis_matrix, pre_matrix, locations, junc2block):
+    time_duration = np.round(time_duration*10)
     q_length = 100
     qin = mp.Queue(q_length)
     qout = mp.Queue(q_length)
@@ -228,11 +239,11 @@ def simulating(time_duration, q_frame, schedule, rhythm, m, n, noj, blocksize, d
     th_su.start()
 
     mps = []
-    for i in range(mp_num):
+    for _ in range(mp_num):
         m1 = mp.Process(target=worker, args=(qin, qout, m, n, noj, blocksize, 
             dis_matrix, pre_matrix, locations, junc2block))
         mps.append(m1)
         m1.start()
     th_su.join()
-    for point in mps:
-        point.join()
+    for item in mps:
+        item.join()

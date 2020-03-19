@@ -150,3 +150,8 @@ class entrance_btn(SB.SBitmapButton):
     def Changenum2Data(self, new_num):
         self.num2 = self.num2 + new_num
         self.InitBuffer()
+    
+    def Change_data(self, data):
+        self.num1 = data[0][self.order[0]][self.order[1]]
+        self.num2 = data[1][self.order[0]][self.order[1]]
+        self.InitBuffer()
