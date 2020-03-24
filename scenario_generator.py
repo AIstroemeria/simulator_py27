@@ -14,13 +14,97 @@ from cplex.exceptions import CplexError
 #import gurobipy as gp
 #from gurobipy import GRB
 import json
+from pubsub import pub
 
-def scenario_generator(de,wh,rhy,pla):
+def scenario_generator(q, m, n, noj, de, wh, rhy, pla):
     total_demand_rate = de
-    workingtime = wh*3600
+    workingtime = wh*60
     rhythm = rhy
     capatity = pla
 
+    juncs = []
+    #[x,y]
+    for j in range(m):
+        for i in range(n-1):
+            juncs.append([i+0.5, j])
+    for i in range(n):
+        for j in range(m-1):
+            juncs.append([i, j+0.5])
+    lor = np.ones([2*m+2*n+noj+4*m*n,2*m+2*n+noj+4*m*n])
+    lor = lor * 10000
+
+    #entrance 2 intersection
+    for i in range(m):
+        if np.mod(i,2) == 0:
+            lor[i,2*m+2*n+noj+4*i*n] = 2.5
+        else:
+            lor[i,2*m+2*n+noj+4*(i+1)*n-4] = 2.5
+    for i in range(n):
+        if np.mod(i,2) == 0:
+            lor[m+i,2*m+2*n+noj+4*(m-1)*n+4*i+1] = 2.5
+        else:
+            lor[m+i,2*m+2*n+noj+4*i+1] = 2.5
+    #intersection 2 exit
+    for i in range(m):
+        if np.mod(i,2) == 0:
+            lor[2*m+2*n+noj+4*(i+1)*n-2,m+n+i] = 2.5
+        else:
+            lor[2*m+2*n+noj+4*i*n+2,m+n+i] = 2.5
+    for i in range(n):
+        if np.mod(i,2) == 0:
+            lor[2*m+2*n+noj+4*i+3,m+n+m+i] = 2.5
+        else:
+            lor[2*m+2*n+noj+4*(m-1)*n+4*i+3,m+n+m+i] = 2.5
+    #junction 2 intersection and inverse
+    for i in range(noj):
+        pos = juncs[i]
+        if np.mod(pos[0]*2,2) == 1:         # junction in row
+            intersec1 = [pos[1],int(pos[0]-0.5)]
+            intersec2 = [pos[1],int(pos[0]+0.5)]
+            if np.mod(pos[1], 2) == 0:      # odd row
+                lor[2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4+2, 2*m+2*n+i] = 2.5
+                lor[2*m+2*n+i, 2*m+2*n+noj+intersec2[0]*4*n+intersec2[1]*4] = 2.5 
+            else:
+                lor[2*m+2*n+noj+intersec2[0]*4*n+intersec2[1]*4+2, 2*m+2*n+i] = 2.5
+                lor[2*m+2*n+i, 2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4] = 2.5 
+        else:
+            intersec1 = [int(pos[1]-0.5),pos[0]]
+            intersec2 = [int(pos[1]+0.5),pos[0]]
+            if np.mod(pos[0], 2) == 0:      # odd column
+                lor[2*m+2*n+noj+intersec2[0]*4*n+intersec1[1]*4+3, 2*m+2*n+i] = 2.5
+                lor[2*m+2*n+i, 2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4+1] = 2.5
+            else:
+                lor[2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4+3, 2*m+2*n+i] = 2.5
+                lor[2*m+2*n+i, 2*m+2*n+noj+intersec2[0]*4*n+intersec2[1]*4+1] = 2.5
+    #intersection to intersection
+    for i in range(m):
+        for j in range(n):
+            intersec = 2*m+2*n+noj+i*4*n+j*4
+            lor[intersec, intersec+3] = 10
+            lor[intersec+1, intersec+2] = 10
+            lor[intersec, intersec+2] = 5
+            lor[intersec+1, intersec+3] = 5
+
+    #0
+    num_of_nodes = len(lor)
+    for i in range(num_of_nodes):
+        for j in range(num_of_nodes):
+            if i == j:
+                lor[i, j] = 0
+
+    #recording edges
+    edges = [[] for _ in range(num_of_nodes)]
+    for i in range(num_of_nodes):
+        for j in range(num_of_nodes):
+            if lor[i][j] < 10000:
+                edges[i].append((j, lor[i][j]))
+
+    '''
+    pre_matrix, dis_matrix = generate_path_rythmn(num_of_nodes, edges)
+    data = {"pre":pre_matrix.tolist(), "dis":dis_matrix.tolist()}
+    with open("./data.json", 'w', encoding='utf-8') as json_file:
+        json.dump(data, json_file, ensure_ascii=False)
+    '''
     data={}
     with io.open("./data.json",'r',encoding='utf-8') as json_file: 
         data=json.load(json_file)
@@ -71,11 +155,14 @@ def scenario_generator(de,wh,rhy,pla):
 
         if iter < (workingtime/(2*rhythm)) :
             new_demand = demand_generator(m, n, noj, rhythm, total_demand_rate)
-            remainning_order = remainning_order + sum(sum(new_demand)) 
-            total_car_num = total_car_num + sum(sum(new_demand))
-            demand = demand + new_demand
+            num_of_new_order = 0
+            for item in new_demand:
+                demand[item[0]][item[1]] += item[2]
+                num_of_new_order += item[2]
+            remainning_order = remainning_order + num_of_new_order
+            total_car_num = total_car_num + num_of_new_order
         else:
-            pass
+            new_demand = None
         
         for ords in order[iter]:
             demand[ords[0]][ords[1]] = demand[ords[0]][ords[1]] + ords[2]
@@ -138,7 +225,7 @@ def scenario_generator(de,wh,rhy,pla):
             my_sense = "" + len(rho)*"L"
 
             my_prob = cplex.Cplex()
-            my_prob.objective.set_sense(my_prob.objective.sense.maximize)
+            my_prob.objective.set_sense(my_prob.objective.sense.minimize)
             my_prob.variables.add(obj = obj, ub = ub, lb = lb, names = name_col)
             my_prob.linear_constraints.add(lin_expr=rows, senses=my_sense, rhs = rho)
 
@@ -232,24 +319,18 @@ def scenario_generator(de,wh,rhy,pla):
                 new_N_ea[-1][start].append([num[0],capatity])
         N_ea = new_N_ea[1:]
 
-        res.append(temp_res)
+        res.append((temp_res,new_demand))
 
         #renew cost
         cost = rhythm*(1+lw)
 
-        #process = '|'
-        #for i in range(30):
-            #if i < 30*iter/(workingtime/rhythm):
-                #process = process + "#"
-            #else:
-                #process = process + ' '
-        #process = process + '|  %d'%np.round(100*iter/(3600/rhythm)) + '%'
-        #process1 = 'total car num: %d  ;  total waiting time %d ' %(total_car_num, total_waiting_time)
-        #print('')
-        #print('')
-        #print(iter)
-        #print(process)
-        #print(process1)
+        '''
+        process1 = 'total car num: %d  ;  total waiting time %d ' %(total_car_num, total_waiting_time)
+        print('')
+        print('')
+        print(iter)
+        print(process1)
+        '''
 
         if iter >= ((workingtime/(2*rhythm))-1) and sum(sum(demand))==0 and remainning_order == 0:
             print("demand satisfied at interval %d" %iter)
@@ -262,6 +343,8 @@ def scenario_generator(de,wh,rhy,pla):
                 else:
                     break    
             with io.open(filename,'w',encoding='utf-8') as json_file:
-                json.dump(res,json_file,ensure_ascii=False)
+                json_file.write(unicode(json.dumps(res, ensure_ascii=False)))
+            q.put(res)
             break
+        pub.sendMessage("change_guage_generating", v=100*iter*rhythm/(workingtime))
     return 0

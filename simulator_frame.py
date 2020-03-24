@@ -21,11 +21,10 @@ from main_window import the_map_window
 from layout_Dialog import InputDialog
 from generating_Dialog import generate_Dialog
 from simulating import simulating
-# from PyPubSub import pub as Publisher
 
 class MDIFrame(wx.MDIParentFrame):
     def __init__(self):
-        wx.MDIParentFrame.__init__(self, None, -1, "Simulation_v0.1", size = (800,800))
+        wx.MDIParentFrame.__init__(self, None, -1, "Simulation_v0.1", size = (1000,900))
         self.filepath = ""
         self.filename = ""
         menu = wx.Menu()
@@ -37,6 +36,9 @@ class MDIFrame(wx.MDIParentFrame):
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, self.OnNewWindow, id = 5000)
         self.Bind(wx.EVT_MENU, self.OnExit, id = 5001)
+        win = Simulator_frame(self, 6, 6, id=-1, title = self.filename, layout_filepath = "./layout0.json")
+        win.Show(True)
+        
 
     def OnExit(self, evt):
         self.Close(True)  
@@ -86,7 +88,7 @@ class Simulator_frame(wx.MDIChildFrame):
         self.n = n #num of vertival lines
         self.noj = 2*m*n - m - n
         self.rhythm = 2
-        self.simulation_res = None
+        self.simulation_res = []
         self.blockinfo_res = None
 
         self.is_start = False
@@ -98,9 +100,10 @@ class Simulator_frame(wx.MDIChildFrame):
         self.accelarate_r = 5
         self.num_of_wave = 1
         self.current_running_t = 0
+        self.current_wave = 0
         self.new_period = 0
         self.time_duration = 0.1 # duration between different simulation frames
-        self.completemission = 0
+        self.completemission = [0]
         self.counting_frames = 0
 
         block_scale = 100
@@ -195,19 +198,19 @@ class Simulator_frame(wx.MDIChildFrame):
         change2 = 0.5 + (1-change1)/2
         img2 = img1.Scale(int(change1*self.blocksize[0]),int(change1*self.blocksize[1]))
         self.junc_appe = wx.Bitmap(img2)
-        self.junction_block_info.append(np.zeros((2,self.m-1,self.n-1)))
+        self.junction_block_info.append(np.zeros((2,self.m-1,self.n-1), np.int))
         for i in range(self.m-1):
             self.junction_blocks.append([])
             for j in range(self.n-1):
                 b = junction_btn(self.map, -1, bitmap = self.junc_appe, pos = ((1+change2+j)*self.blocksize[0],(self.m-i-1+change2)*self.blocksize[1]), 
                     size = (change1*self.blocksize[0],change1*self.blocksize[1]), order = [i,j])
                 b.SetUseFocusIndicator(False)
-                b.Setnum1Data(40)
-                b.Setnum2Data(5)
+                b.Setnum1Data(0)
+                b.Setnum2Data(0)
                 self.Bind(wx.EVT_BUTTON, self.watching_junction, b)
                 self.junction_blocks[i].append(b)
-                self.junction_block_info[0][0][i][j] = 40
-                self.junction_block_info[0][1][i][j] = 5 
+                self.junction_block_info[0][0][i][j] = 0
+                self.junction_block_info[0][1][i][j] = 0
                 pub.subscribe(b.Change_data, "update_junction")
 
         # entrance buttons
@@ -217,7 +220,7 @@ class Simulator_frame(wx.MDIChildFrame):
         self.entrance_block_info = []
         i = 0
         self.entrance_blocks.append([])
-        self.entrance_block_info.append(np.zeros((2,2,max(self.m,self.n))))
+        self.entrance_block_info.append(np.zeros((2,2,max(self.m,self.n)), np.int))
         for j in range(self.m):
             if np.mod(j,2) == 0:
                 b = entrance_btn(self.map, -1, bitmap = self.entr_appe, pos = (0,(self.m-0.9-j)*self.blocksize[1]), 
@@ -375,36 +378,53 @@ class Simulator_frame(wx.MDIChildFrame):
         while True:
             temp_res = q_frame.get()
             if temp_res is None:
+                mornitor = self.simulation_res[-1]
+                time = len(self.simulation_res)
                 break
             self.simulation_res.append(temp_res[0])
             self.junction_block_info.append(copy.copy(self.junction_block_info[-1]))
             self.entrance_block_info.append(copy.copy(self.entrance_block_info[-1]))
+            self.completemission.append(copy.copy(self.completemission[-1]))
             for item in temp_res[1]:
-                if item[2] == 0:
-                    if item[1] >= 2*(self.m+self.n):
-                        order = self.junc2block[item[1] - 2*self.m - 2*self.n]
-                        self.junction_block_info[-1][0][order[0]][order[1]] += 0
-                        self.junction_block_info[-1][1][order[0]][order[1]] += item[3]
-                        self.completemission += item[3]
+                if item[1] == 0:  # loaded entrance to junc
+                    if item[0] >= 2*(self.m+self.n):
+                        order = self.junc2block[item[0] - 2*self.m - 2*self.n]
+                        self.junction_block_info[-1][0][order[0]][order[1]] += item[2]
+                        self.junction_block_info[-1][1][order[0]][order[1]] += item[2]
+                        self.completemission[-1] += item[2]
                         
-                    elif item[1] >= (self.m+self.n):
-                        order = self.entrance2block[item[1]]
+                    elif item[0] < (self.m+self.n):
+                        order = self.entrance2block[item[0]]
+                        self.entrance_block_info[-1][0][order[0]][order[1]] += item[2]
+                        self.entrance_block_info[-1][1][order[0]][order[1]] += item[2] 
+                        self.completemission[-1] += 0
+                    
+                    else: 
+                        pass
+
+                elif item[1] == 1:  # return junc to exit
+                    if item[0] >= 2*(self.m+self.n):
+                        order = self.junc2block[item[0] - 2*self.m - 2*self.n]
+                        self.junction_block_info[-1][0][order[0]][order[1]] += 0
+                        self.junction_block_info[-1][1][order[0]][order[1]] += item[2]
+                        self.completemission[-1] += 0
+
+                    elif item[0] >= (self.m+self.n):
+                        order = self.entrance2block[item[0]]
                         self.entrance_block_info[-1][0][order[0]][order[1]] += 0
-                        self.entrance_block_info[-1][0][order[0]][order[1]] += item[3] 
-                        self.completemission += item[3]
+                        self.entrance_block_info[-1][1][order[0]][order[1]] += item[2] 
+                        self.completemission[-1] += item[2]
+                    
+                    else:
+                        pass
+                
+                elif item[1] == 2:  # new demand
+                    order = self.entrance2block[item[0]]
+                    self.entrance_block_info[-1][0][order[0]][order[1]] += item[2]
 
-                elif item[2] == 1:
-                    if item[1] >= 2*(self.m+self.n):
-                        order = self.junc2block[item[1] - 2*self.m - 2*self.n]
-                        self.junction_block_info[-1][0][order[0]][order[1]] += item[3]
-                        self.junction_block_info[-1][1][order[0]][order[1]] += item[3]
-                        self.completemission += item[3]
-
-                    elif item[1] >= (self.m+self.n):
-                        order = self.entrance2block[item[1]]
-                        self.entrance_block_info[-1][0][order[0]][order[1]] += item[3]
-                        self.entrance_block_info[-1][0][order[0]][order[1]] += item[3] 
-                        self.completemission += item[3]
+                elif item[1] == 3:  # new demand
+                    order = self.junc2block[item[0] - 2*self.m - 2*self.n]
+                    self.junction_block_info[-1][0][order[0]][order[1]] += item[2]
 
     # load simulation result
     def loading(self, event):
@@ -422,7 +442,7 @@ class Simulator_frame(wx.MDIChildFrame):
                 self.num_of_wave = len(self.res)
 
             self.btn2.Enabled = True
-            wx.MessageBox('Done!')
+            #wx.MessageBox('Done!')
             self.statusbar.SetStatusText("Loading success" , 0)
         dlg.Destroy()
 
@@ -437,7 +457,6 @@ class Simulator_frame(wx.MDIChildFrame):
     def playing(self, event):
         print("press btn2")
 
-        self.completemission = 0
         self.counting_frames = 0
         self.pausing_time = 0
         self.current_running_t = 0
@@ -451,7 +470,7 @@ class Simulator_frame(wx.MDIChildFrame):
         self.btn4.Enabled = False
         self.btn5.Enabled = False
         self.statusbar.SetStatusText("Playing" , 0)
-        self.statusbar.SetStatusText("Complete mission: %d" % self.completemission, 2)
+        self.statusbar.SetStatusText("Complete mission: %d" % self.completemission[0], 2)
     
     # pause and resume
     def pausing(self, event):
@@ -486,7 +505,7 @@ class Simulator_frame(wx.MDIChildFrame):
     def generate(self, event):
         print("press btn6")
 
-        dlg = generate_Dialog()
+        dlg = generate_Dialog(self.m, self.n, self.noj)
         dlg.Show()
 
     # press at junctions
@@ -495,15 +514,20 @@ class Simulator_frame(wx.MDIChildFrame):
         item = self.FindWindowById(theid)
         m,n = item.get_order()
         print("press at junction (%d,%d)" % (m,n))
-        infos = np.array(self.junction_block_info[m][n])
-        infos = infos.transpose()
+        x = []
+        infos_0 = []
+        infos_1 = []
+        for i in range(self.counting_frames):
+            x.append(self.time_duration*(i+1))
+            infos_0.append(self.junction_block_info[i][0][m][n])
+            infos_1.append(self.junction_block_info[i][1][m][n])
         plt.close()
         fig=plt.figure("Junction (%d,%d)" % (m,n),(10,5),frameon=False)
         ax1=plt.subplot(1,2,1)
-        plt.plot(infos[0],infos[1],'g-')
+        plt.plot(x,infos_0,'g-')
         plt.ylabel("Goods")
         ax1=plt.subplot(1,2,2)
-        plt.plot(infos[0],infos[2],'r-')
+        plt.plot(x,infos_1,'r-')
         plt.ylabel("AGVs")
         plt.show()
     
@@ -513,15 +537,20 @@ class Simulator_frame(wx.MDIChildFrame):
         item = self.FindWindowById(theid)
         m,n = item.get_order()
         print("press at entrance (%d,%d)" % (m,n))
-        infos = np.array(self.entrance_block_info[m][n])
-        infos = infos.transpose()
+        x = []
+        infos_0 = []
+        infos_1 = []
+        for i in range(self.counting_frames):
+            x.append(self.time_duration*(i+1))
+            infos_0.append(self.entrance_block_info[i][0][m][n])
+            infos_1.append(self.entrance_block_info[i][1][m][n])
         plt.close()
         fig=plt.figure("Entrance (%d,%d)" % (m,n),(10,5),frameon=False)
         ax1=plt.subplot(1,2,1)
-        plt.plot(infos[0],infos[1],'g-')
-        plt.ylabel("Goods")
+        plt.plot(x,infos_0,'g-')
+        plt.ylabel("Demands")
         ax1=plt.subplot(1,2,2)
-        plt.plot(infos[0],infos[2],'r-')
+        plt.plot(x,infos_1,'r-')
         plt.ylabel("AGVs")
         plt.show()
 
@@ -531,7 +560,7 @@ class Simulator_frame(wx.MDIChildFrame):
         while True:
             if self.is_start:
                 if self.reload:
-                    wave  = 0
+                    self.current_wave  = 0
                     self.reload = False
 
                 if not self.next_flag:
@@ -547,11 +576,10 @@ class Simulator_frame(wx.MDIChildFrame):
                     self.is_start = False
                     self.next_flag = False
                 
-                self.counting_frames = np.floor(self.current_running_t / self.time_duration)
-                self.counting_frames = int(self.counting_frames)
-                wave = int(np.floor(self.counting *self.time_duration / self.rhythm))
+                self.counting_frames = int(np.floor(self.current_running_t / self.time_duration))
+                self.current_wave = int(np.floor(self.counting *self.time_duration / self.rhythm))
 
-                if len(self.simulation_res) <= self.counting_frames:
+                if len(self.simulation_res) <= self.counting_frames+ 1:
                     time.sleep(0.1)
                     self.pretime = time.time()
                     continue
@@ -564,18 +592,23 @@ class Simulator_frame(wx.MDIChildFrame):
         pretime = time.time()
         while True:
             curtime = time.time()
+
+            if len(self.simulation_res) <= self.counting_frames+1:
+                time.sleep(0.1)
+                continue
+
             if self.is_start == False or curtime - pretime < self.time_duration:
                 time.sleep(0.01)
             else:
                 wx.CallAfter(self.statusbar.SetStatusText, "Operating time: %d sec %d min %d hour" %(np.mod(self.current_running_t,60),
                  np.floor(np.mod(self.current_running_t,3600)/60), np.floor(self.current_running_t/3600)) , 1)
-                wx.CallAfter(self.set_gauge, self.current_running_t/(self.rhythm * self.num_of_wave)*100)
+                wx.CallAfter(self.set_gauge, self.current_running_t/(2 * self.rhythm * self.num_of_wave)*100)
                 if self.new_period != 0: 
                     wx.CallAfter(self.fps_label.SetLabel, "fps %.1f" % (1/self.new_period))
                 else:
                     wx.CallAfter(self.fps_label.SetLabel, "fps 999")
 
-                wx.CallAfter(self.statusbar.SetStatusText, "Complete mission: %d" % self.completemission, 2)
+                wx.CallAfter(self.statusbar.SetStatusText, "Complete mission: %d" % self.completemission[self.counting_frames], 2)
                 pub.sendMessage("update_junction", data = self.junction_block_info[self.counting_frames])
                 pub.sendMessage("update_entrance", data = self.entrance_block_info[self.counting_frames])
                 wx.CallAfter(self.map.SetpointsData, self.simulation_res[self.counting_frames])

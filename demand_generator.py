@@ -7,7 +7,7 @@ import random
 
 def demand_generator(m, n, noj, rhythm, total_demand_rate):
     demand_para = total_demand_rate/(((m+n)*noj)*3600)
-    demands = np.zeros((m+n+noj,m+n+noj)) 
+    demands = []
     '''
     for i in range(m+n+noj):
         for j in range(m+n+noj):
@@ -29,7 +29,7 @@ def demand_generator(m, n, noj, rhythm, total_demand_rate):
             while time > 0:
                 counts = counts + 1
                 time = time + np.log(random.random())/demand_para
-            demands[i][j] = counts
+            demands.append([i,j,counts])
 
     
     return demands

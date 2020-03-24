@@ -118,7 +118,7 @@ class the_map_window(wx.Window):
             dc.DrawCircle(item[3][0],item[3][1],point_scale)
             
             # Whether carring good
-            if item[5][0] != 0:
+            if item[5][0] == 0:
                 dc.SetPen(wx.Pen("Black", style = wx.PENSTYLE_TRANSPARENT))
                 dc.SetBrush(wx.Brush('Green'))
                 dc.DrawCircle(item[3][0],item[3][1],point_scale*0.8)
