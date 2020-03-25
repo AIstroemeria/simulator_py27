@@ -36,7 +36,7 @@ class MDIFrame(wx.MDIParentFrame):
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, self.OnNewWindow, id = 5000)
         self.Bind(wx.EVT_MENU, self.OnExit, id = 5001)
-        win = Simulator_frame(self, 6, 6, id=-1, title = self.filename, layout_filepath = "./layout0.json")
+        win = Simulator_frame(self, id=-1, title = self.filename, layout_filepath = "./layout0.json")
         win.Show(True)
         
 
@@ -57,19 +57,15 @@ class MDIFrame(wx.MDIParentFrame):
                 self.filepath = dlg.GetPath()
             dlg.Destroy()
         else:
-            self.filename = ehefile
+            self.filename = thefile
             self.filepath = "./" + thefile
 
-        with io.open(self.filepath,'r',encoding='utf-8') as json_file: 
-            data=json.load(json_file)
-        m = data['m']
-        n = data['n']
-        win = Simulator_frame(self, m, n, id=-1, title = self.filename, layout_filepath = self.filepath)
+        win = Simulator_frame(self, id=-1, title = self.filename, layout_filepath = self.filepath)
         win.Show(True)
         
 
 class Simulator_frame(wx.MDIChildFrame):
-    def __init__(self, parent, m=6, n=6, id=wx.ID_ANY, title="",
+    def __init__(self, parent, id=wx.ID_ANY, title="",
                 layout_filepath = "",
                 pos=wx.DefaultPosition, size=wx.DefaultSize,
                 style=wx.DEFAULT_FRAME_STYLE,                 
@@ -79,14 +75,16 @@ class Simulator_frame(wx.MDIChildFrame):
                                      pos, size, style, name)
 
         # Attributes        
+        self.layout_filepath = layout_filepath
         with io.open(layout_filepath,'r',encoding='utf-8') as json_file: 
             data=json.load(json_file)
+        self.m = data['m']
+        self.n = data['n']
         self.pre_matrix = data['pre']
         self.dis_matrix = data['dis']
+        self.edges = data['edges']
 
-        self.m = m #num of horizontal lines
-        self.n = n #num of vertival lines
-        self.noj = 2*m*n - m - n
+        self.noj = 2*self.m*self.n - self.m - self.n
         self.rhythm = 2
         self.simulation_res = []
         self.blockinfo_res = None
@@ -96,7 +94,6 @@ class Simulator_frame(wx.MDIChildFrame):
         self.pausing_time = 0
         self.next_flag = False
         self.next_t_start = None
-        self.counting = -1
         self.accelarate_r = 5
         self.num_of_wave = 1
         self.current_running_t = 0
@@ -108,25 +105,25 @@ class Simulator_frame(wx.MDIChildFrame):
 
         block_scale = 100
         road_scale = 1/12
-        self.size = ((n+2)*block_scale,(m+2)*block_scale)
+        self.size = ((self.n+2)*block_scale,(self.m+2)*block_scale)
         self.blocksize = (block_scale, block_scale)
         self.roadwidth =  block_scale*road_scale
 
         self.juncs = []
         #[x,y]
-        for j in range(m):
-            for i in range(n-1):
+        for j in range(self.m):
+            for i in range(self.n-1):
                 self.juncs.append([i+0.5, j])
-        for i in range(n):
-            for j in range(m-1):
+        for i in range(self.n):
+            for j in range(self.m-1):
                 self.juncs.append([i, j+0.5])
         self.locations = self.get_locations(self.m,self.n,self.noj)
         
 
         # junction2block
         self.junc2block = {}
-        blocknum0 = m-1
-        blocknum1 = n-1
+        blocknum0 = self.m-1
+        blocknum1 = self.n-1
         for i in range(blocknum0):
             for j in range(blocknum1):
                 decision = [0,0,0,0]
@@ -150,13 +147,13 @@ class Simulator_frame(wx.MDIChildFrame):
                     decision = [1,0,0,1]    
 
                 if decision[0] == 1:
-                    self.junc2block[i*(n-1)+j] = [i,j]                   #down
+                    self.junc2block[i*(self.n-1)+j] = [i,j]                   #down
                 if decision[1] == 1:
-                    self.junc2block[(i+1)*(n-1)+j] = [i,j]               #up
+                    self.junc2block[(i+1)*(self.n-1)+j] = [i,j]               #up
                 if decision[2] == 1:
-                    self.junc2block[m*(n-1) + j*(m-1)+i] = [i,j]         #left
+                    self.junc2block[self.m*(self.n-1) + j*(self.m-1)+i] = [i,j]         #left
                 if decision[3] == 1:
-                    self.junc2block[m*(n-1) + (j+1)*(m-1)+i] = [i,j]     #right
+                    self.junc2block[self.m*(self.n-1) + (j+1)*(self.m-1)+i] = [i,j]     #right
         
 
         # Controls
@@ -212,10 +209,12 @@ class Simulator_frame(wx.MDIChildFrame):
                 self.junction_block_info[0][0][i][j] = 0
                 self.junction_block_info[0][1][i][j] = 0
                 pub.subscribe(b.Change_data, "update_junction")
+        
+        self.init_juncblock = copy.copy(self.junction_block_info)
 
         # entrance buttons
         self.entrance2block = {}
-        self.entr_appe = wx.Bitmap(name="mate\entrance.png", type = wx.BITMAP_TYPE_PNG)
+        self.entr_appe = wx.Bitmap(name="mate\worker.png", type = wx.BITMAP_TYPE_PNG)
         self.entrance_blocks = []
         self.entrance_block_info = []
         i = 0
@@ -262,6 +261,7 @@ class Simulator_frame(wx.MDIChildFrame):
             self.entrance_block_info[0][1][i][j] = 40 
             pub.subscribe(b.Change_data, "update_entrance")
         
+        self.init_entrblock = copy.copy(self.entrance_block_info)
 
         # layout
         time_rate_box = wx.BoxSizer(wx.HORIZONTAL)
@@ -304,6 +304,8 @@ class Simulator_frame(wx.MDIChildFrame):
         self.Bind(wx.EVT_BUTTON, self.generate, self.btn6)
         self.Bind(wx.EVT_SCROLL_CHANGED, self.Change_rate_slider, self.rate_slider)
         self.Bind(wx.EVT_SPINCTRL, self.Change_rate_sc, self.rate_sc)
+
+        pub.subscribe(self.refresh_main, "refresh_main")
 
         thread_mt = td.Thread(target=self.Mainthread)
         thread_mt.setDaemon(True)
@@ -378,8 +380,8 @@ class Simulator_frame(wx.MDIChildFrame):
         while True:
             temp_res = q_frame.get()
             if temp_res is None:
-                mornitor = self.simulation_res[-1]
                 time = len(self.simulation_res)
+                mornitor = self.entrance_block_info[-1]
                 break
             self.simulation_res.append(temp_res[0])
             self.junction_block_info.append(copy.copy(self.junction_block_info[-1]))
@@ -430,15 +432,19 @@ class Simulator_frame(wx.MDIChildFrame):
     def loading(self, event):
         print("press btn1")
         self.simulation_res = []
-        self.blockinfo_res = []
+        self.junction_block_info = copy.copy(self.init_juncblock)
+        self.entrance_block_info = copy.copy(self.init_entrblock)
+        self.completemission = [0]
 
         wildcard = "Json files(*.json)|*.json"
         dlg = wx.FileDialog(None,"select a result file",os.getcwd(),"",wildcard=wildcard,style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) 
         result = dlg.ShowModal()
         if result == wx.ID_OK:
             filepath = dlg.GetPath()
-            with io.open(filepath,'r',encoding='utf-8') as json_file: 
-                self.res=json.load(json_file)
+            with io.open(filepath,'r',encoding='utf-8') as json_file:
+                temp_res = json.load(json_file)
+                self.res = temp_res['res']
+                self.Ts = temp_res['Ts']
                 self.num_of_wave = len(self.res)
 
             self.btn2.Enabled = True
@@ -447,7 +453,7 @@ class Simulator_frame(wx.MDIChildFrame):
         dlg.Destroy()
 
         q_frame = mp.Queue()
-        td_simulate = td.Thread(target = simulating, args = (self.time_duration, q_frame, self.res, self.rhythm, self.m, self.n, self.noj, 
+        td_simulate = td.Thread(target = simulating, args = (self.time_duration, q_frame, self.res, self.Ts, self.rhythm, self.m, self.n, self.noj, 
             self.blocksize, self.dis_matrix, self.pre_matrix, self.locations, self.junc2block,))
         td_simulate.start()
         td_collect = td.Thread(target = self.get_simulation_res, args = (q_frame,))
@@ -505,7 +511,7 @@ class Simulator_frame(wx.MDIChildFrame):
     def generate(self, event):
         print("press btn6")
 
-        dlg = generate_Dialog(self.m, self.n, self.noj)
+        dlg = generate_Dialog(self.m, self.n, self.noj, self.layout_filepath)
         dlg.Show()
 
     # press at junctions
@@ -576,13 +582,15 @@ class Simulator_frame(wx.MDIChildFrame):
                     self.is_start = False
                     self.next_flag = False
                 
-                self.counting_frames = int(np.floor(self.current_running_t / self.time_duration))
-                self.current_wave = int(np.floor(self.counting *self.time_duration / self.rhythm))
+                current_frame = int(np.floor(self.current_running_t / self.time_duration))
 
-                if len(self.simulation_res) <= self.counting_frames+ 1:
+                if len(self.simulation_res) <= current_frame:
                     time.sleep(0.1)
                     self.pretime = time.time()
                     continue
+                
+                self.counting_frames = current_frame
+                self.current_wave = int(np.floor(self.counting_frames *self.time_duration / self.rhythm))
                 
                 time.sleep(0.01)
             else:
@@ -593,7 +601,7 @@ class Simulator_frame(wx.MDIChildFrame):
         while True:
             curtime = time.time()
 
-            if len(self.simulation_res) <= self.counting_frames+1:
+            if len(self.simulation_res) <= self.counting_frames:
                 time.sleep(0.1)
                 continue
 
@@ -608,9 +616,9 @@ class Simulator_frame(wx.MDIChildFrame):
                 else:
                     wx.CallAfter(self.fps_label.SetLabel, "fps 999")
 
-                wx.CallAfter(self.statusbar.SetStatusText, "Complete mission: %d" % self.completemission[self.counting_frames], 2)
-                pub.sendMessage("update_junction", data = self.junction_block_info[self.counting_frames])
-                pub.sendMessage("update_entrance", data = self.entrance_block_info[self.counting_frames])
+                wx.CallAfter(self.statusbar.SetStatusText, "Complete mission: %d" % self.completemission[self.counting_frames+1], 2)
+                pub.sendMessage("update_junction", data = self.junction_block_info[self.counting_frames+1])
+                pub.sendMessage("update_entrance", data = self.entrance_block_info[self.counting_frames+1])
                 wx.CallAfter(self.map.SetpointsData, self.simulation_res[self.counting_frames])
                 pretime = curtime
 
@@ -628,6 +636,8 @@ class Simulator_frame(wx.MDIChildFrame):
         self.Update()
     '''
 
+    def refresh_main(self):
+        self.Update()
 
     def set_gauge(self, v):
         self.gauge.SetValue(v)

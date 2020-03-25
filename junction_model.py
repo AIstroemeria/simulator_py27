@@ -6,6 +6,7 @@ import wx
 import wx.lib.agw.shapedbutton as SB
 import numpy as np
 import copy
+from pubsub import pub
 
 class junction_btn(SB.SBitmapButton):
     def __init__(self, parent, id, bitmap, pos=wx.DefaultPosition, size=wx.DefaultSize, order = [0,0]):
@@ -106,3 +107,4 @@ class junction_btn(SB.SBitmapButton):
         self.num1 = data[0][self.order[0]][self.order[1]]
         self.num2 = data[1][self.order[0]][self.order[1]]
         self.InitBuffer()
+        pub.sendMessage("refresh_main")

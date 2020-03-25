@@ -15,11 +15,12 @@ from multiprocessing import Queue
 from pubsub import pub
  
 class generate_Dialog(wx.Dialog):
-    def __init__(self, m, n, noj):
+    def __init__(self, m, n, noj, layout_filepath):
         wx.Dialog.__init__(self, None, -1, "New scenario", size=(260, 280))
         self.m = m
         self.n = n
         self.noj = noj
+        self.layout_filepath = layout_filepath
         self.InitUI() #绘制Dialog的界面
         self.result = None
  
@@ -68,7 +69,7 @@ class generate_Dialog(wx.Dialog):
         rhy = self.rhythm_input.GetValue()
         pla = self.platoon_input.GetValue()
         q = Queue()
-        td1 = td.Thread(target = scenario_generator, args = (q, self.m, self.n, self.noj, de, wh, rhy, pla))
+        td1 = td.Thread(target = scenario_generator, args = (q, self.m, self.n, self.noj, self.layout_filepath, de, wh, rhy, pla))
         td1.start()
         td2 = td.Thread(target = self.receiving, args = (q,))
         td2.start()

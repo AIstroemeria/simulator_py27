@@ -69,31 +69,35 @@ class InputDialog(wx.Dialog):
                 juncs.append([i, j+0.5])
         noj = m*(n-1) + n*(m-1)
 
-
+        l1 = 1.5        # intersection to junc/entrance/exit
+        l2 = 1.5
+        l3 = 1.5
+        l4 = 3        # intersection to intersection
+        l5 = 6         # turning
         lor = np.ones([2*m+2*n+noj+4*m*n,2*m+2*n+noj+4*m*n])
         lor = lor * 10000
         #entrance 2 intersection
         for i in range(m):
             if np.mod(i,2) == 0:
-                lor[i,2*m+2*n+noj+4*i*n] = 2.5
+                lor[i,2*m+2*n+noj+4*i*n] = l1
             else:
-                lor[i,2*m+2*n+noj+4*(i+1)*n-4] = 2.5
+                lor[i,2*m+2*n+noj+4*(i+1)*n-4] = l1
         for i in range(n):
             if np.mod(i,2) == 0:
-                lor[m+i,2*m+2*n+noj+4*(m-1)*n+4*i+1] = 2.5
+                lor[m+i,2*m+2*n+noj+4*(m-1)*n+4*i+1] = l1
             else:
-                lor[m+i,2*m+2*n+noj+4*i+1] = 2.5
+                lor[m+i,2*m+2*n+noj+4*i+1] = l1
         #intersection 2 exit
         for i in range(m):
             if np.mod(i,2) == 0:
-                lor[2*m+2*n+noj+4*(i+1)*n-2,m+n+i] = 2.5
+                lor[2*m+2*n+noj+4*(i+1)*n-2,m+n+i] = l2
             else:
-                lor[2*m+2*n+noj+4*i*n+2,m+n+i] = 2.5
+                lor[2*m+2*n+noj+4*i*n+2,m+n+i] = l2
         for i in range(n):
             if np.mod(i,2) == 0:
-                lor[2*m+2*n+noj+4*i+3,m+n+m+i] = 2.5
+                lor[2*m+2*n+noj+4*i+3,m+n+m+i] = l2
             else:
-                lor[2*m+2*n+noj+4*(m-1)*n+4*i+3,m+n+m+i] = 2.5
+                lor[2*m+2*n+noj+4*(m-1)*n+4*i+3,m+n+m+i] = l2
         #junction 2 intersection and inverse
         for i in range(noj):
             pos = juncs[i]
@@ -101,28 +105,28 @@ class InputDialog(wx.Dialog):
                 intersec1 = [pos[1],int(pos[0]-0.5)]
                 intersec2 = [pos[1],int(pos[0]+0.5)]
                 if np.mod(pos[1], 2) == 0:      # odd row
-                    lor[2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4+2, 2*m+2*n+i] = 2.5
-                    lor[2*m+2*n+i, 2*m+2*n+noj+intersec2[0]*4*n+intersec2[1]*4] = 2.5 
+                    lor[2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4+2, 2*m+2*n+i] = l3
+                    lor[2*m+2*n+i, 2*m+2*n+noj+intersec2[0]*4*n+intersec2[1]*4] = l3 
                 else:
-                    lor[2*m+2*n+noj+intersec2[0]*4*n+intersec2[1]*4+2, 2*m+2*n+i] = 2.5
-                    lor[2*m+2*n+i, 2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4] = 2.5 
+                    lor[2*m+2*n+noj+intersec2[0]*4*n+intersec2[1]*4+2, 2*m+2*n+i] = l3
+                    lor[2*m+2*n+i, 2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4] = l3 
             else:
                 intersec1 = [int(pos[1]-0.5),pos[0]]
                 intersec2 = [int(pos[1]+0.5),pos[0]]
                 if np.mod(pos[0], 2) == 0:      # odd column
-                    lor[2*m+2*n+noj+intersec2[0]*4*n+intersec1[1]*4+3, 2*m+2*n+i] = 2.5
-                    lor[2*m+2*n+i, 2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4+1] = 2.5
+                    lor[2*m+2*n+noj+intersec2[0]*4*n+intersec1[1]*4+3, 2*m+2*n+i] = l3
+                    lor[2*m+2*n+i, 2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4+1] = l3
                 else:
-                    lor[2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4+3, 2*m+2*n+i] = 2.5
-                    lor[2*m+2*n+i, 2*m+2*n+noj+intersec2[0]*4*n+intersec2[1]*4+1] = 2.5
+                    lor[2*m+2*n+noj+intersec1[0]*4*n+intersec1[1]*4+3, 2*m+2*n+i] = l3
+                    lor[2*m+2*n+i, 2*m+2*n+noj+intersec2[0]*4*n+intersec2[1]*4+1] = l3
         #intersection to intersection
         for i in range(m):
             for j in range(n):
                 intersec = 2*m+2*n+noj+i*4*n+j*4
-                lor[intersec,intersec+3] = 10
-                lor[intersec+1,intersec+2] = 10
-                lor[intersec,intersec+2] = 5
-                lor[intersec+1,intersec+3] = 5
+                lor[intersec,intersec+3] = l5
+                lor[intersec+1,intersec+2] = l5
+                lor[intersec,intersec+2] = l4
+                lor[intersec+1,intersec+3] = l4
 
         #0
         num_of_nodes = len(lor)
@@ -139,7 +143,7 @@ class InputDialog(wx.Dialog):
                     edges[i].append((j,lor[i][j]))
         
         pre_matrix,dis_matrix = generate_path_rhythm(num_of_nodes, edges)
-        data = {"pre":pre_matrix.tolist(), "dis":dis_matrix.tolist(),"m":m, "n":n}
+        data = {"pre":pre_matrix.tolist(), "dis":dis_matrix.tolist(),"m":m, "n":n, "edges":edges}
         temp = 0
         filename = "./layout"+str(temp)+".json"
         while True:
@@ -150,7 +154,7 @@ class InputDialog(wx.Dialog):
                 break    
 
         with io.open(filename,'w',encoding='utf-8') as json_file:
-            json.dump(data,json_file,ensure_ascii=False)
+            json_file.write(unicode(json.dumps(data, ensure_ascii=False)))
         
         self.func_callBack(1,"layout"+str(temp)+".json") 
 

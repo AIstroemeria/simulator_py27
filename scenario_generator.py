@@ -16,13 +16,15 @@ from cplex.exceptions import CplexError
 import json
 from pubsub import pub
 
-def scenario_generator(q, m, n, noj, de, wh, rhy, pla):
+def scenario_generator(q, m, n, noj, layout_filepath, de, wh, rhy, pla):
     total_demand_rate = de
     workingtime = wh*60
     rhythm = rhy
     capatity = pla
 
     juncs = []
+
+    '''
     #[x,y]
     for j in range(m):
         for i in range(n-1):
@@ -99,17 +101,18 @@ def scenario_generator(q, m, n, noj, de, wh, rhy, pla):
             if lor[i][j] < 10000:
                 edges[i].append((j, lor[i][j]))
 
-    '''
+
     pre_matrix, dis_matrix = generate_path_rythmn(num_of_nodes, edges)
     data = {"pre":pre_matrix.tolist(), "dis":dis_matrix.tolist()}
     with open("./data.json", 'w', encoding='utf-8') as json_file:
         json.dump(data, json_file, ensure_ascii=False)
     '''
     data={}
-    with io.open("./data.json",'r',encoding='utf-8') as json_file: 
+    with io.open(layout_filepath,'r',encoding='utf-8') as json_file: 
         data=json.load(json_file)
     pre_matrix = data['pre']
     dis_matrix = data['dis']
+    edges = data['edges']
 
     longest_path = 0
     for i in range(m+n):
@@ -121,12 +124,12 @@ def scenario_generator(q, m, n, noj, de, wh, rhy, pla):
             if pre_matrix[i][j] != -1 and dis_matrix[i][j] > longest_path:
                 longest_path = dis_matrix[i][j]
     
-    Ts = np.zeros(m+n+noj)
+    Ts = np.zeros(m+n+noj,dtype=int)
     for i in range(m+n+noj):
         if i in range(m,m+n):
-            Ts[i] = 5
+            Ts[i] = 1 # 5
         elif i in range(m+n+m*(n-1),m+n+noj):
-            Ts[i] = 5
+            Ts[i] = 1 # 5
         else:
             pass
 
@@ -165,9 +168,10 @@ def scenario_generator(q, m, n, noj, de, wh, rhy, pla):
             new_demand = None
         
         for ords in order[iter]:
-            demand[ords[0]][ords[1]] = demand[ords[0]][ords[1]] + ords[2]
+            demand[ords[0]][ords[1]] += ords[2]
 
         if sum(sum(demand)) == 0:
+            res.append(([],None))
             continue
         obj = []
         name_col = []
@@ -266,23 +270,18 @@ def scenario_generator(q, m, n, noj, de, wh, rhy, pla):
                 break
             for j in range(m+n+noj):
                 if demand[i][j] != 0:
-                    # renwe demand
-                    ############# Set the target of agv
-                    if i <= m+n:
-                        status = 0
-                    else:
-                        status = 1
-                    #############
-                    temp_res.append([i,j,demand[i][j],solution[paraindex],status])
-                    demand[i][j] = demand[i][j] -solution[paraindex]
-                    if demand[i][j] == 0:
-                        lw[i][j] = 0
-                    else:
-                        lw[i][j] = lw[i][j] + 1
-                    
-                    # renew remainning room
                     if solution[paraindex] != 0:
-
+                        # renwe demand
+                        ############# Set the target of agv
+                        if i < m+n:
+                            status = 0
+                        else:
+                            status = 1
+                        #############
+                        temp_res.append([i,j,demand[i][j],solution[paraindex],status])
+                        demand[i][j] = demand[i][j] - solution[paraindex]
+                    
+                        # renew remainning room
                         if i < m+n:
                             i_temp = i
                         else:
@@ -294,7 +293,7 @@ def scenario_generator(q, m, n, noj, de, wh, rhy, pla):
                             e = int(np.floor((dis_matrix[i_temp][temp]+Ts[i])/rhythm))
                             for edgeindex in range(len(new_N_ea[e][temp])):
                                 if new_N_ea[e][temp][edgeindex][0] == pre_node:
-                                    new_N_ea[e][temp][edgeindex][1] = new_N_ea[e][temp][edgeindex][1] - solution[paraindex]
+                                    new_N_ea[e][temp][edgeindex][1] -= solution[paraindex]
                             pre_node = temp
                             
                         # add new order for return
@@ -307,6 +306,11 @@ def scenario_generator(q, m, n, noj, de, wh, rhy, pla):
                                 order[arrive_time].append([j,i-1,solution[paraindex]])
                         else:
                             remainning_order = remainning_order - solution[paraindex]
+
+                    if demand[i][j] == 0:
+                        lw[i][j] = 0
+                    else:
+                        lw[i][j] = lw[i][j] + 1
 
                     paraindex = paraindex + 1
                     if paraindex == len(solution):
@@ -342,8 +346,9 @@ def scenario_generator(q, m, n, noj, de, wh, rhy, pla):
                     filename = "./res"+str(temp)+".json"
                 else:
                     break    
+            writing = {'res':res, 'Ts':Ts.tolist()}
             with io.open(filename,'w',encoding='utf-8') as json_file:
-                json_file.write(unicode(json.dumps(res, ensure_ascii=False)))
+                json_file.write(unicode(json.dumps(writing, ensure_ascii=False)))
             q.put(res)
             break
         pub.sendMessage("change_guage_generating", v=100*iter*rhythm/(workingtime))

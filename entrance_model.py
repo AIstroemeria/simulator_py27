@@ -7,6 +7,7 @@ import wx
 import wx.lib.agw.shapedbutton as SB
 import numpy as np
 import copy
+from pubsub import pub
 
 class entrance_btn(SB.SBitmapButton):
     def __init__(self, parent, id, bitmap, pos=wx.DefaultPosition, size=wx.DefaultSize, order = [0,0]):
@@ -19,19 +20,20 @@ class entrance_btn(SB.SBitmapButton):
         self.num1 = 0
         self.num2 = 10
 
+        self.scale = 1
         img1 = self.bmp.ConvertToImage()
         if order[0] == 0 and np.mod(order[1],2) == 0:
-            img2 = img1.Scale(size[0],size[1]/1.8)
+            img2 = img1.Scale(size[0]*self.scale,size[1]*self.scale/1.8)
         elif order[0] == 0 and np.mod(order[1],2) == 1:
-            img2 = img1.Scale(size[0],size[1]/1.8)
-            img2 = img2.Rotate180()
+            img2 = img1.Scale(size[0]*self.scale,size[1]*self.scale/1.8)
+            #img2 = img2.Rotate180()
         elif order[0] == 1 and np.mod(order[1],2) == 0:
-            img2 = img1.Rotate90() 
-            img2 = img2.Scale(size[0]/1.8,size[1])
+            #img2 = img1.Rotate90() 
+            img2 = img1.Scale(size[0]*self.scale/1.8,size[1]*self.scale)
         elif order[0] == 1 and np.mod(order[1],2) == 1:
-            img2 = img1.Rotate90() 
-            img2 = img2.Scale(size[0]/1.8,size[1])
-            img2 = img2.Rotate180()
+            #img2 = img1.Rotate90() 
+            img2 = img1.Scale(size[0]*self.scale/1.8,size[1]*self.scale)
+            #img2 = img2.Rotate180()
         self.bmp = wx.Bitmap(img2)
 
         img1 = wx.Image(name="mate\goods.png", type = wx.BITMAP_TYPE_PNG)
@@ -76,14 +78,15 @@ class entrance_btn(SB.SBitmapButton):
         dc.SetPen(wx.Pen("Black",style = wx.PENSTYLE_TRANSPARENT))
         dc.SetBrush(wx.Brush("White"))
         dc.DrawRectangle (0, 0, *dc.GetSize())
+        offset = 0.3
         if self.order[0] == 0 and np.mod(self.order[1],2) == 0:
-            dc.DrawBitmap(self.bmp,0,4/18 * self.size[1])
+            dc.DrawBitmap(self.bmp,0,offset/(1+2*offset) * self.size[1])
         elif self.order[0] == 0 and np.mod(self.order[1],2) == 1:
-            dc.DrawBitmap(self.bmp,0,4/18 * self.size[1])
+            dc.DrawBitmap(self.bmp,0,offset/(1+2*offset) * self.size[1])
         elif self.order[0] == 1 and np.mod(self.order[1],2) == 0:
-            dc.DrawBitmap(self.bmp,4/18 * self.size[0],0)
+            dc.DrawBitmap(self.bmp,offset/(1+2*offset) * self.size[0],0)
         elif self.order[0] == 1 and np.mod(self.order[1],2) == 1:
-            dc.DrawBitmap(self.bmp,4/18 * self.size[0],0)
+            dc.DrawBitmap(self.bmp,offset/(1+2*offset) * self.size[0],0)
         str1 = str(self.num1)
         str2 = str(self.num2)
         dc.SetFont(self.titleFont)
@@ -92,25 +95,25 @@ class entrance_btn(SB.SBitmapButton):
         rate3 = []
         rate4 = []
         if self.order[0] == 0 and np.mod(self.order[1],2) == 0:
-            rate1 = [1/2,0.4/1.8]
-            rate2 = [1/2,1.4/1.8]
-            rate3 = [1/4,0.4/1.8]
-            rate4 = [1/4,1.4/1.8]
+            rate1 = [1/2,offset/(1+2*offset)]
+            rate2 = [1/2,(1+offset)/(1+2*offset)]
+            rate3 = [1/4,offset/(1+2*offset)]
+            rate4 = [1/4,(1+offset)/(1+2*offset)]
         elif self.order[0] == 0 and np.mod(self.order[1],2) == 1:
-            rate1 = [1/2,0.4/1.8]
-            rate2 = [1/2,1.4/1.8]
-            rate3 = [1/4,0.4/1.8]
-            rate4 = [1/4,1.4/1.8]
+            rate1 = [1/2,offset/(1+2*offset)]
+            rate2 = [1/2,(1+offset)/(1+2*offset)]
+            rate3 = [1/4,offset/(1+2*offset)]
+            rate4 = [1/4,(1+offset)/(1+2*offset)]
         elif self.order[0] == 1 and np.mod(self.order[1],2) == 0:
-            rate1 = [0.4/1.8,1/2]
-            rate2 = [1.4/1.8,1/2]
-            rate3 = [0.4/1.8,1/4]
-            rate4 = [1.4/1.8,1/4]
+            rate1 = [offset/(1+2*offset),1/2]
+            rate2 = [(1+offset)/(1+2*offset),1/2]
+            rate3 = [offset/(1+2*offset),1/4]
+            rate4 = [(1+offset)/(1+2*offset),1/4]
         elif self.order[0] == 1 and np.mod(self.order[1],2) == 1:
-            rate1 = [0.4/1.8,1/2]
-            rate2 = [1.4/1.8,1/2] 
-            rate3 = [0.4/1.8,1/4]
-            rate4 = [1.4/1.8,1/4]
+            rate1 = [offset/(1+2*offset),1/2]
+            rate2 = [(1+offset)/(1+2*offset),1/2] 
+            rate3 = [offset/(1+2*offset),1/4]
+            rate4 = [(1+offset)/(1+2*offset),1/4]
 
         dc.DrawBitmap(self.goodbmp,rate3[0]*self.size[0]-self.goodbmp.GetWidth()/2,rate3[1]*self.size[1]-self.goodbmp.GetHeight()/2)
         dc.SetBrush(wx.Brush("Green"))
@@ -155,3 +158,4 @@ class entrance_btn(SB.SBitmapButton):
         self.num1 = data[0][self.order[0]][self.order[1]]
         self.num2 = data[1][self.order[0]][self.order[1]]
         self.InitBuffer()
+        pub.sendMessage("refresh_main")
