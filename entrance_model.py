@@ -8,6 +8,7 @@ import wx.lib.agw.shapedbutton as SB
 import numpy as np
 import copy
 from pubsub import pub
+import os
 
 class entrance_btn(SB.SBitmapButton):
     def __init__(self, parent, id, bitmap, pos=wx.DefaultPosition, size=wx.DefaultSize, order = [0,0]):
@@ -36,11 +37,13 @@ class entrance_btn(SB.SBitmapButton):
             #img2 = img2.Rotate180()
         self.bmp = wx.Bitmap(img2)
 
-        img1 = wx.Image(name="mate\goods.png", type = wx.BITMAP_TYPE_PNG)
+        name = os.getcwd() + os.sep + "mate" + os.sep + 'goods.png'
+        img1 = wx.Image(name=name, type = wx.BITMAP_TYPE_PNG)
         img2 = img1.Scale(min(self.size)*0.2,min(self.size)*0.2)
         self.goodbmp = wx.Bitmap(img2)
 
-        img1 = wx.Image(name="mate\drone.png", type = wx.BITMAP_TYPE_PNG)
+        name = os.getcwd() + os.sep + "mate" + os.sep + 'drone.png'
+        img1 = wx.Image(name=name, type = wx.BITMAP_TYPE_PNG)
         img2 = img1.Scale(min(self.size)*0.2,min(self.size)*0.2)
         self.agvbmp = wx.Bitmap(img2)
 

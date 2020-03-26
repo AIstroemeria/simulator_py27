@@ -33,9 +33,8 @@ class MDIFrame(wx.MDIParentFrame):
         menu.Append(5001, "&Exit")
         menubar = wx.MenuBar()
         menubar.Append(menu, "&File")
-        icon_file = wx.Bitmap('.\mate\icon.png', wx.BITMAP_TYPE_PNG)
         icon = wx.Icon()
-        icon.CopyFromBitmap(icon_file)
+        icon.LoadFile("icon.ico",wx.BITMAP_TYPE_ICO)
         self.SetIcon(icon)
 
 
@@ -201,7 +200,8 @@ class Simulator_frame(wx.MDIChildFrame):
         self.fps_label = wx.StaticText(self.map, -1, "", pos = [20,20])
 
         # junction buttons
-        img1 = wx.Image(name="mate\junc.png", type = wx.BITMAP_TYPE_PNG)
+        name = os.getcwd() + os.sep + "mate" + os.sep + 'junc.png'
+        img1 = wx.Image(name=name, type = wx.BITMAP_TYPE_PNG)
         self.junction_blocks = []
         self.junction_block_info = []
         change1 = 1-3*road_scale
@@ -227,7 +227,8 @@ class Simulator_frame(wx.MDIChildFrame):
 
         # entrance buttons
         self.entrance2block = {}
-        self.entr_appe = wx.Bitmap(name="mate\worker.png", type = wx.BITMAP_TYPE_PNG)
+        name = os.getcwd() + os.sep + "mate" + os.sep + 'worker.png'
+        self.entr_appe = wx.Bitmap(name=name, type = wx.BITMAP_TYPE_PNG)
         self.entrance_blocks = []
         self.entrance_block_info = []
         i = 0
@@ -492,8 +493,10 @@ class Simulator_frame(wx.MDIChildFrame):
         q_frame = mp.Queue()
         td_simulate = td.Thread(target = simulating, args = (self.time_duration, q_frame, self.res, self.Ts, self.rhythm, self.m, self.n, self.noj, 
             self.blocksize, self.dis_matrix, self.pre_matrix, self.locations, self.junc2block,))
+        td_simulate.setDaemon(True)
         td_simulate.start()
         td_collect = td.Thread(target = self.get_simulation_res, args = (q_frame,))
+        td_collect.setDaemon(True)
         td_collect.start()
         self.btn2.SetLabel("play")
         
@@ -660,29 +663,16 @@ class Simulator_frame(wx.MDIChildFrame):
                 wx.CallAfter(self.map.SetpointsData, self.simulation_res[self.counting_frames])
                 pretime = curtime
 
-    '''
-    def updating_infos_in_juncbtn(self,num1,num2,order,time):
-        self.junction_blocks[order[0]][order[1]].Changenum1Data(num1)
-        self.junction_blocks[order[0]][order[1]].Changenum2Data(num2)
-        self.junction_blocks[order[0]][order[1]].Refresh()
-        self.Update()
-    
-    def updating_infos_in_entrbtn(self,num1,num2,order,time):
-        self.entrance_blocks[order[0]][order[1]].Changenum1Data(num1)
-        self.entrance_blocks[order[0]][order[1]].Changenum2Data(num2)
-        self.entrance_blocks[order[0]][order[1]].Refresh()
-        self.Update()
-    '''
-
     def refresh_main(self):
         self.Update()
 
     def set_gauge(self, v):
         self.gauge.SetValue(v)
 
-
+'''
 if __name__ == "__main__":
     app = wx.App()
     frame = MDIFrame()
     frame.Show()
     app.MainLoop()
+ '''
