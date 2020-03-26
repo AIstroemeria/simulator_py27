@@ -18,7 +18,7 @@ class junction_btn(SB.SBitmapButton):
         self.num1 = 15
         self.num2 = 8
         self.capacity_1 = 100
-        self.capacity_2 = 20
+        self.capacity_2 = 50
 
         self.InitBuffer()
 

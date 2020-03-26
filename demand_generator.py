@@ -5,32 +5,45 @@ from __future__ import division
 import numpy as np
 import random
 
-def demand_generator(m, n, noj, rhythm, total_demand_rate):
-    demand_para = total_demand_rate/(((m+n)*noj)*3600)
+def demand_generator(m, n, noj, rhythm, total_demand_rate, typ):
     demands = []
-    '''
-    for i in range(m+n+noj):
-        for j in range(m+n+noj):
-            if i >= m+n and i==j:
-                pass
-            else:
+    if typ == 1:
+        demand_para = total_demand_rate/(((m+n)*noj)*3600)
+        '''
+        for i in range(m+n+noj):
+            for j in range(m+n+noj):
+                if i >= m+n and i==j:
+                    pass
+                else:
+                    time = rhythm
+                    counts = -1
+                    while time > 0:
+                        counts = counts + 1
+                        time = time + np.log(random.random())/demand_para
+                    demands[i][j] = counts
+        '''
+        for i in range(m+n):
+            for j_t in range(noj):
+                j = j_t + m + n
                 time = rhythm
                 counts = -1
                 while time > 0:
                     counts = counts + 1
                     time = time + np.log(random.random())/demand_para
-                demands[i][j] = counts
-    '''
-    for i in range(m+n):
-        for j_t in range(noj):
-            j = j_t + m + n
-            time = rhythm
-            counts = -1
-            while time > 0:
-                counts = counts + 1
-                time = time + np.log(random.random())/demand_para
-            demands.append([i,j,counts])
+                demands.append([i,j,counts])
+    elif typ == 2:
+        demand_para = total_demand_rate/(((m+n)*noj/2)*3600)
 
+        for i in range(m+n):
+            for j_t in range(int(noj/2)):
+                j = j_t + m + n
+                time = rhythm
+                counts = -1
+                while time > 0:
+                    counts = counts + 1
+                    time = time + np.log(random.random())/demand_para
+                demands.append([i,j,counts])
+        
     
     return demands
 

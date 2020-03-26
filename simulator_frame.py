@@ -20,6 +20,7 @@ from entrance_model import entrance_btn
 from main_window import the_map_window
 from layout_Dialog import InputDialog
 from generating_Dialog import generate_Dialog
+from scenario_generator import *
 from simulating import simulating
 
 class MDIFrame(wx.MDIParentFrame):
@@ -32,6 +33,11 @@ class MDIFrame(wx.MDIParentFrame):
         menu.Append(5001, "&Exit")
         menubar = wx.MenuBar()
         menubar.Append(menu, "&File")
+        icon_file = wx.Bitmap('.\mate\icon.png', wx.BITMAP_TYPE_PNG)
+        icon = wx.Icon()
+        icon.CopyFromBitmap(icon_file)
+        self.SetIcon(icon)
+
 
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, self.OnNewWindow, id = 5000)
@@ -102,6 +108,8 @@ class Simulator_frame(wx.MDIChildFrame):
         self.time_duration = 0.1 # duration between different simulation frames
         self.completemission = [0]
         self.counting_frames = 0
+
+        self.test_data = []
 
         block_scale = 100
         road_scale = 1/12
@@ -174,6 +182,11 @@ class Simulator_frame(wx.MDIChildFrame):
         self.btn6 = wx.Button(self.panel, -1, label = 'generate')
         self.btn6.Enabled = True
 
+        ######
+        self.btn7 = wx.Button(self.panel, -1, label = 'test')
+        self.btn7.Enabled = True
+
+        #########
         self.rate_label = wx.StaticText(self.panel, -1, "time rate: ",size = [70,-1])
         self.blank_label = wx.StaticText(self.panel, -1, " ",size = [100,-1])
         self.rate_sc = wx.SpinCtrl(self.panel, -1, "", min = 1, max = 50, initial = self.accelarate_r, size = [30,-1])
@@ -275,6 +288,8 @@ class Simulator_frame(wx.MDIChildFrame):
         toolarea.Add(self.btn3, 0, wx.EXPAND)
         toolarea.Add(self.btn4, 0, wx.EXPAND)
         toolarea.Add(self.btn5, 0, wx.EXPAND)
+        ########
+        # toolarea.Add(self.btn7, 0, wx.EXPAND)
         toolarea.Add(self.blank_label, 0, wx.EXPAND)
         toolarea.Add(time_rate_box, 0, wx.EXPAND)
         toolarea.Add(self.rate_slider, 0, wx.EXPAND)
@@ -302,10 +317,13 @@ class Simulator_frame(wx.MDIChildFrame):
         self.Bind(wx.EVT_BUTTON, self.resuming, self.btn4)
         self.Bind(wx.EVT_BUTTON, self.go_next_rhy, self.btn5)
         self.Bind(wx.EVT_BUTTON, self.generate, self.btn6)
+        self.Bind(wx.EVT_BUTTON, self.test_func, self.btn7)
         self.Bind(wx.EVT_SCROLL_CHANGED, self.Change_rate_slider, self.rate_slider)
         self.Bind(wx.EVT_SPINCTRL, self.Change_rate_sc, self.rate_sc)
 
         pub.subscribe(self.refresh_main, "refresh_main")
+        pub.subscribe(self.simulating_thread, "start_simulating")
+        pub.subscribe(self.reading_test, "get_test_data")
 
         thread_mt = td.Thread(target=self.Mainthread)
         thread_mt.setDaemon(True)
@@ -313,6 +331,22 @@ class Simulator_frame(wx.MDIChildFrame):
 
         thread_uu = td.Thread(target=self.updating_GUI)
         thread_uu.start()
+
+
+    ############### test
+    def test_func(self, event):
+        q = mp.Queue()
+        for i in range(5):
+            for j in range(5):
+                scenario_generator_new(q, self.m, self.n, self.noj, self.layout_filepath, (i+1)*2000, 10, 2, 1)
+                del(q)
+                q = mp.Queue()
+        print(self.test_data)
+    
+    def reading_test(self,data):
+        self.test_data.append(data)
+
+    #####################
     
     def initStatusBar(self):
         self.statusbar = self.CreateStatusBar()
@@ -431,33 +465,37 @@ class Simulator_frame(wx.MDIChildFrame):
     # load simulation result
     def loading(self, event):
         print("press btn1")
-        self.simulation_res = []
-        self.junction_block_info = copy.copy(self.init_juncblock)
-        self.entrance_block_info = copy.copy(self.init_entrblock)
-        self.completemission = [0]
-
         wildcard = "Json files(*.json)|*.json"
         dlg = wx.FileDialog(None,"select a result file",os.getcwd(),"",wildcard=wildcard,style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) 
         result = dlg.ShowModal()
         if result == wx.ID_OK:
             filepath = dlg.GetPath()
-            with io.open(filepath,'r',encoding='utf-8') as json_file:
-                temp_res = json.load(json_file)
-                self.res = temp_res['res']
-                self.Ts = temp_res['Ts']
-                self.num_of_wave = len(self.res)
-
-            self.btn2.Enabled = True
+            pub.sendMessage("start_simulating", filepath=filepath)
             #wx.MessageBox('Done!')
             self.statusbar.SetStatusText("Loading success" , 0)
         dlg.Destroy()
+    
+    def simulating_thread(self, filepath):
+        self.simulation_res = []
+        self.junction_block_info = copy.copy(self.init_juncblock)
+        self.entrance_block_info = copy.copy(self.init_entrblock)
+        self.completemission = [0]
 
+        with io.open(filepath,'r',encoding='utf-8') as json_file:
+            temp_res = json.load(json_file)
+        self.res = temp_res['res']
+        self.Ts = temp_res['Ts']
+        self.rhythm = temp_res['rhythm']
+        self.num_of_wave = len(self.res)
+
+        self.btn2.Enabled = True
         q_frame = mp.Queue()
         td_simulate = td.Thread(target = simulating, args = (self.time_duration, q_frame, self.res, self.Ts, self.rhythm, self.m, self.n, self.noj, 
             self.blocksize, self.dis_matrix, self.pre_matrix, self.locations, self.junc2block,))
         td_simulate.start()
         td_collect = td.Thread(target = self.get_simulation_res, args = (q_frame,))
         td_collect.start()
+        self.btn2.SetLabel("play")
         
     # play simulation 
     def playing(self, event):
@@ -477,6 +515,7 @@ class Simulator_frame(wx.MDIChildFrame):
         self.btn5.Enabled = False
         self.statusbar.SetStatusText("Playing" , 0)
         self.statusbar.SetStatusText("Complete mission: %d" % self.completemission[0], 2)
+        self.btn2.SetLabel("restart")
     
     # pause and resume
     def pausing(self, event):
@@ -510,7 +549,6 @@ class Simulator_frame(wx.MDIChildFrame):
 
     def generate(self, event):
         print("press btn6")
-
         dlg = generate_Dialog(self.m, self.n, self.noj, self.layout_filepath)
         dlg.Show()
 
